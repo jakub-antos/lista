@@ -1,7 +1,7 @@
 import re
 from unidecode import unidecode
 
-# Kolejność wyświetlania grup
+# Kolejność wyświetlania grup w pliku
 GROUP_ORDER = [
     "Popularne", "Sport", "Film", "Muzyka", "Informacje", "Dokumenty", "Dla Dzieci", "Rozrywka"
 ]
@@ -14,10 +14,10 @@ EXACT_OVERRIDES = {
     "tvp info": "Informacje",
 }
 
-# Priorytetowa kolejność w Popularnych (kanal, który ma mieć wyżej, świadomość polskich nazw)
+# Kanały, które mają być na górze w grupie Popularne (kolejność)
 POPULARNE_PRIORITY = ["tvp1", "tvp 1", "tvp2", "tvp 2", "polsat", "tvn"]
 
-# Rozbudowany słownik kanałów i grup (oparty na analizie tematyki kanału)
+# Słownik wzorców kanałów => grupy (rozbudowany, możesz własny poszerzać)
 EXACT_GROUPS = {
     # Sport
     "polsat sport": "Sport", "canal+ sport": "Sport", "canal plus sport": "Sport",
@@ -53,7 +53,7 @@ EXACT_GROUPS = {
     "bbc entertainment": "Rozrywka", "paramount network": "Rozrywka", "superstacja": "Rozrywka",
 }
 
-# Fallback grupy (szersze dopasowanie po kluczach)
+# Fallback dla pozostałych kanałów (słowo kluczowe => grupa)
 KEYWORD_GROUPS = [
     ("sport", "Sport"),
     ("film", "Film"), ("cinema", "Film"), ("kino", "Film"), ("serial", "Film"),
@@ -67,29 +67,30 @@ KEYWORD_GROUPS = [
 
 def assign_group(ch_name):
     name = unidecode(ch_name.lower().strip())
-    # Najpierw najważniejsze wyjątki od użytkownika:
+    # Najpierw wyjątki użytkownika:
     for k in EXACT_OVERRIDES:
         if k in name:
             return EXACT_OVERRIDES[k]
-    # Kanały 4fun: "4fun kids" => Dla Dzieci, "4fun" => Muzyka
+    # 4fun: kids -> Dla Dzieci, bez kids -> Muzyka
     if "4fun" in name and "kids" in name:
         return "Dla Dzieci"
     if "4fun" in name:
         return "Muzyka"
-    # Kanały AXN zawsze do Film
+    # Nazwy AXN zawsze Film
     if name.startswith("axn"):
         return "Film"
-    # Inne wyjątki precyzyjne:
+    # Dokładny słownik
     for k in EXACT_GROUPS:
         if k in name:
             return EXACT_GROUPS[k]
-    # Klucz ogólny po słowie
+    # Słowa kluczowe
     for kw, group in KEYWORD_GROUPS:
         if kw in name:
             return group
-    # Domyślnie rozrywka
+    # Domyślnie
     return "Rozrywka"
 
+# Analiza pliku i budowa nowej struktury
 with open("IPTV2024.m3u", "r", encoding="utf-8") as fin, open("IPTV2024_grouped.m3u", "w", encoding="utf-8") as fout:
     fout.write("#EXTM3U\n")
     lines = fin.readlines()
@@ -102,20 +103,20 @@ with open("IPTV2024.m3u", "r", encoding="utf-8") as fin, open("IPTV2024_grouped.
             match = re.search(r",(.*)", line)
             ch_name = match.group(1).strip() if match else ""
             group = assign_group(ch_name)
-            # Wyczyść stare group-title, jeśli istnieje
+            # Usuń stare group-title
             new_line = re.sub(r'group-title=\"[^\"]*\"', '', line)
             new_line = re.sub(r'\s+,', ',', new_line)
             parts = new_line.split(',', 1)
             parts[0] += f' group-title="{group}"'
             new_line = ','.join(parts)
-            # URL, zakładamy standard: po #EXTINF zawsze url w next line
+            # Pobierz URL (za #EXTINF)
             url = lines[i+1].strip() if (i+1) < len(lines) and lines[i+1].strip() else ""
             temp_channels.append((group, ch_name, new_line, url))
             i += 2
         else:
             i += 1
 
-    # Grupowanie i sortowanie: Popularne wyżej, z priorytetem TVP1, TVP2, Polsat, TVN
+    # Grupowanie wg GROUP_ORDER, sort na Popularnych wg ustalonej kolejności
     group_map = {g: [] for g in GROUP_ORDER}
     leftovers = []
     for group, name, meta, url in temp_channels:
@@ -130,14 +131,17 @@ with open("IPTV2024.m3u", "r", encoding="utf-8") as fin, open("IPTV2024_grouped.
             if pat == n or pat in n:
                 return idx
         return 1000
+
+    # Popularne – najpierw TVP1, TVP2, Polsat, TVN, reszta alfabetycznie
     popular = sorted(group_map["Popularne"], key=pop_priority)
     group_map["Popularne"] = popular
 
-    # Złóż output
+    # Złóż całość
     for group in GROUP_ORDER:
         for name, meta, url in group_map[group]:
             fout.write(f"{meta}\n")
             fout.write(f"{url}\n")
+    # Ewentualne resztki
     for name, meta, url in leftovers:
         fout.write(f"{meta}\n")
         fout.write(f"{url}\n")
