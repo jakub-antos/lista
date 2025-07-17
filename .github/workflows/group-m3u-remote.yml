@@ -3,7 +3,7 @@ name: Auto group IPTV remote playlist
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *'  # codziennie o 4:00
+    - cron: '0 4 * * *'
 
 jobs:
   fetch_and_group_channels:
