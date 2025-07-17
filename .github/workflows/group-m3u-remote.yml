@@ -8,6 +8,8 @@ on:
 jobs:
   fetch_and_group_channels:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
