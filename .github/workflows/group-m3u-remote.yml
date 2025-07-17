@@ -1,0 +1,36 @@
+name: Auto group IPTV remote playlist
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'  # codziennie o 4:00
+
+jobs:
+  fetch_and_group_channels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Download source IPTV file
+        run: |
+          curl -sSL -o IPTV2024.m3u https://raw.githubusercontent.com/IPolandTV/TV/refs/heads/main/IPTV2024.m3u
+
+      - name: Install dependencies
+        run: pip install unidecode
+
+      - name: Auto group IPTV playlist
+        run: python scripts/auto_group_m3u.py
+
+      - name: Commit grouped playlist
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add IPTV2024_grouped.m3u
+          git commit -m "Zaktualizowano: automatyczne grupowanie kanałów IPTV"
+          git push
